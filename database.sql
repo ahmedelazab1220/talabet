@@ -7,7 +7,8 @@ CREATE TABLE users (
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     phone_number VARCHAR(15) UNIQUE,
-    address TEXT,
+    address POINT NOT NULL, -- Changed to POINT type for geospatial data
+    location_name VARCHAR(255), -- Added to store readable location names
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -27,10 +28,20 @@ CREATE TABLE restaurants (
     email VARCHAR(100) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     phone_number VARCHAR(15) UNIQUE,
-    address TEXT NOT NULL,
+    address POINT NOT NULL, -- Changed to POINT type for geospatial data
+    location_name VARCHAR(255), -- Added to store readable location names
     logo_url VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Restaurant Admins Table (Many-to-Many Relationship)
+CREATE TABLE restaurant_admins (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    restaurant_id INT NOT NULL,
     admin_id INT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(restaurant_id)
+    ON DELETE CASCADE,
     FOREIGN KEY (admin_id) REFERENCES admins(admin_id)
     ON DELETE CASCADE
 );
@@ -166,14 +177,30 @@ CREATE TABLE promotions (
 -- Coupons Table
 CREATE TABLE coupons (
     coupon_id INT AUTO_INCREMENT PRIMARY KEY,
+    restaurant_id INT, -- Nullable to allow platform-wide coupons. Application logic can check if this is NULL to differentiate platform-wide coupons.
     code VARCHAR(50) UNIQUE NOT NULL,
     discount_amount DECIMAL(10, 2),
     discount_percentage DECIMAL(5, 2),
     max_discount_amount DECIMAL(10, 2),
-    min_order_amount DECIMAL(10, 2),
+    min_order_amount DECIMAL(10, 2), -- الحد الأدنى للطلب
     valid_from DATE NOT NULL,
     valid_until DATE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    max_uses_per_user INT DEFAULT 1, -- الحد الأقصى لاستخدام الكوبون من قبل اليوزر الواحد
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(restaurant_id)
+    ON DELETE SET NULL
+);
+
+-- Order Coupons Table
+CREATE TABLE order_coupons (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    coupon_id INT NOT NULL,
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders(order_id)
+    ON DELETE RESTRICT,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(coupon_id)
+    ON DELETE RESTRICT
 );
 
 -- Notifications Table
@@ -186,7 +213,7 @@ CREATE TABLE notifications (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     FOREIGN KEY (restaurant_id) REFERENCES restaurants(restaurant_id)
-    ON DELETE CASCADE
+    ON DELETE SET NULL
 );
 
 -- Refunds Table
@@ -199,5 +226,18 @@ CREATE TABLE refunds (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (order_id) REFERENCES orders(order_id)
+    ON DELETE CASCADE
+);
+
+-- User Coupons Table (To manage which coupon is assigned to which user)
+CREATE TABLE user_coupons (
+    user_coupon_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    coupon_id INT NOT NULL,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    used BOOLEAN DEFAULT FALSE, -- لتحديد إذا كان المستخدم قد استخدم الكوبون أم لا
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+    ON DELETE CASCADE,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(coupon_id)
     ON DELETE CASCADE
 );
